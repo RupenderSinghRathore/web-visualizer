@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -24,30 +24,71 @@ func (app *application) normalizeUrl(urlS string) (string, error) {
 	return host + path, nil
 }
 
-func (app *application) getUrlFromHTML(htmlReader io.Reader, baseUrl string) ([]string, error) {
-	urls := []string{}
-	baseUrlStruct, err := url.ParseRequestURI(baseUrl)
+func (app *application) crawlPage(baseUrl string) (map[string]struct{}, error) {
+	pages := make(map[string]struct{})
+	urlB, err := url.ParseRequestURI(baseUrl)
 	if err != nil {
 		return nil, err
 	}
-	htmlNode, err := html.Parse(htmlReader)
+	normalizedUrl, err := app.normalizeUrl(baseUrl)
 	if err != nil {
 		return nil, err
 	}
-	for node := range htmlNode.Descendants() {
-		if node.Type == html.ElementNode && node.Data == "a" {
-			for _, att := range node.Attr {
-				if att.Key == "href" {
-					u, err := url.ParseRequestURI(att.Val)
-					if err != nil {
-						continue
-					}
+	pages[normalizedUrl] = struct{}{}
+	queue := []string{urlB.String()}
 
-					u = baseUrlStruct.ResolveReference(u)
-					urls = append(urls, u.String())
+	for len(queue) != 0 {
+		currUrl := queue[0]
+		queue = queue[1:]
+
+		res, err := http.Get(currUrl)
+		if err != nil {
+			app.logger.Error(err)
+			continue
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode > 399 || !isHTML(res.Header.Get("content-type")) {
+			continue
+		}
+
+		htmlNode, err := html.Parse(res.Body)
+		if err != nil {
+			app.logger.Error(err)
+			continue
+		}
+
+		for node := range htmlNode.Descendants() {
+			if node.Type == html.ElementNode && node.Data == "a" {
+				for _, att := range node.Attr {
+					if att.Key == "href" {
+						nextUrl, err := url.ParseRequestURI(att.Val)
+						if err != nil {
+							app.logger.Error(err)
+							continue
+						}
+
+						nextUrl = urlB.ResolveReference(nextUrl)
+
+						if nextUrl.Hostname() != urlB.Hostname() {
+							continue
+						}
+
+						normalizedNextUrl, err := app.normalizeUrl(nextUrl.String())
+						if err != nil {
+							app.logger.Error(err)
+							continue
+						}
+						if _, ok := pages[normalizedNextUrl]; ok {
+							continue
+						}
+						pages[normalizedNextUrl] = struct{}{}
+
+						queue = append(queue, nextUrl.String())
+					}
 				}
 			}
 		}
 	}
-	return urls, nil
+	return pages, nil
 }
