@@ -133,5 +133,8 @@ func (app *application) crawlPage(baseUrl string) (map[string]struct{}, error) {
 		}
 	}
 
+	close(workQueue)
+	close(result)
+
 	return pages, nil
 }
