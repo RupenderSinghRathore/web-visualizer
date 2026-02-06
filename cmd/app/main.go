@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"mime"
+	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -13,8 +13,13 @@ import (
 
 type application struct {
 	logger *log.Logger
-	currencyLimit int
-	mutex sync.Mutex
+	config *confugration
+	client *http.Client
+}
+type confugration struct {
+	concurrencyLimit,
+	maxDepth,
+	maxWidth int
 }
 
 func isHTML(contentType string) bool {
@@ -23,26 +28,33 @@ func isHTML(contentType string) bool {
 }
 
 func main() {
+	var cfg confugration
+
 	urlc := flag.String("url", "", "url to crawl")
+	flag.IntVar(&cfg.concurrencyLimit, "concurrency_limit", 20, "max goroutines to be spawned")
+	flag.IntVar(&cfg.maxDepth, "max_depth", 100, "max depth of the links graph")
+	flag.IntVar(&cfg.maxWidth, "max_width", 100, "max width of the links graph")
+
 	flag.Parse()
+
 	logger := log.New(os.Stdout)
 	logger.SetTimeFormat(time.DateTime)
 	logger.SetReportTimestamp(true)
 
 	app := application{
 		logger: logger,
-		currencyLimit: 20,
-		mutex: sync.Mutex{},
+		config: &cfg,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
 	if *urlc != "" {
-		pages, err := app.crawlPage(*urlc)
+		graph, err := app.crawlPage(*urlc)
 		if err != nil {
 			logger.Error(err)
 		}
-		// logger.Info(pages)
-		for page := range pages {
-			// logger.Info(page)
-			fmt.Println(page)
+		for endPoint, edge := range graph {
+			fmt.Printf("%s(%d, %d) -> %v\n", endPoint, edge.Visited, edge.Status, edge.Links)
 		}
 	}
 }

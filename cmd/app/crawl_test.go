@@ -71,25 +71,25 @@ func TestNormalizeUrl(t *testing.T) {
 	}
 }
 
-func TestGetUrlFromHTML(t *testing.T) {
+func TestExtractLinksFromBody(t *testing.T) {
 	tests := []struct {
 		name        string
-		htmlBody  string
+		htmlBody    string
 		baseUrl     string
 		expected    []string
 		expectError bool
 	}{
 		{
-			name:       "empty html",
+			name:     "empty html",
 			htmlBody: "",
-			baseUrl:    "https://google.com/pages",
-			expected:   nil,
+			baseUrl:  "https://google.com/pages",
+			expected: nil,
 		},
 		{
-			name:       "no url",
+			name:     "no url",
 			htmlBody: `<html><body></body></html>`,
-			baseUrl:    "https://google.com/pages",
-			expected:   nil,
+			baseUrl:  "https://google.com/pages",
+			expected: nil,
 		},
 		{
 			name: "single url",
@@ -165,7 +165,7 @@ func TestGetUrlFromHTML(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := application{}
+			app := application{config: confugration{maxWidth: 100}}
 			reader := strings.NewReader(tt.htmlBody)
 
 			got, err := app.extractLinksFromBody(reader, tt.baseUrl)

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"RupenderSinghRathore/web-visualizer/internal/data"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,24 +28,38 @@ func (app *application) normalizeUrl(urlStr string) (string, error) {
 	return host + path, nil
 }
 
-func (app *application) fetchLinks(urlStr string) ([]string, error) {
-	res, err := http.Get(urlStr)
+func (app *application) fetchLinks(urlStr string) (string, []string, int, error) {
+	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		return nil, err
+		return "", nil, 0, err
+	}
+	req.Header.Set("User-Agent", "WebVisualizer/1.0")
+	req.Header.Set("Accept", "text/html")
+
+	res, err := app.client.Do(req)
+	if err != nil {
+		return "", nil, 0, err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode > 399 {
-		return nil, fmt.Errorf("%d status code", res.StatusCode)
+	status := res.StatusCode
+	if status > 399 {
+		return "", nil, status, fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
 	}
 	if !isHTML(res.Header.Get("content-type")) {
-		return nil, fmt.Errorf("%s: %s content-type", urlStr, res.Header.Get("content-type"))
+		return "", nil, status, fmt.Errorf(
+			"%s: %s content-type",
+			urlStr,
+			res.Header.Get("content-type"),
+		)
 	}
 
-	return app.extractLinksFromBody(res.Body, urlStr)
+	finalUrl := res.Request.URL.String()
+
+	links, err := app.extractLinksFromBody(res.Body, finalUrl)
+	return finalUrl, links, status, err
 }
 
-// needs testing
 func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]string, error) {
 	baseUrl, err := url.Parse(urlStr)
 	if err != nil {
@@ -52,7 +68,7 @@ func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]s
 	var links []string
 	tokenizer := html.NewTokenizer(body)
 
-	for {
+	for i := 0; i < app.config.maxWidth; {
 		tokenType := tokenizer.Next()
 		if tokenType == html.ErrorToken {
 			return links, nil
@@ -75,66 +91,123 @@ func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]s
 						}
 						link = linkStruct.String()
 						links = append(links, link)
+						i++
 					}
 				}
 			}
 		}
 	}
+	return links, nil
 }
 
-func (app *application) crawlPage(baseUrl string) (map[string]struct{}, error) {
-	pages := make(map[string]struct{})
+type send struct {
+	parent string
+	status int
+	links  []string
+}
+
+func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 	urlB, err := url.ParseRequestURI(baseUrl)
 	if err != nil {
 		return nil, err
 	}
-	normalizedUrl, err := app.normalizeUrl(baseUrl)
+
+	normalizedBase, err := app.normalizeUrl(urlB.String())
 	if err != nil {
 		return nil, err
 	}
-	pages[normalizedUrl] = struct{}{}
 
-	result := make(chan []string)
+	graph := data.Graph{}
+	seen := make(map[string]bool)
+	seen[normalizedBase] = true
 
+	result := make(chan send)
 	workQueue := make(chan string, 100)
 	workQueue <- urlB.String()
 
-	fetching := 1
-	for i := 0; i < app.currencyLimit; i++ {
+	ctx, cancle := context.WithCancel(context.Background())
+	defer cancle()
+
+	for i := 0; i < app.config.concurrencyLimit; i++ {
 		go func() {
-			for urlStr := range workQueue {
-				links, err := app.fetchLinks(urlStr)
-				if err != nil {
-					app.logger.Error(err)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case urlStr := <-workQueue:
+					finalUrl, links, status, err := app.fetchLinks(urlStr)
+					if err != nil {
+						app.logger.Error(err)
+						if status == http.StatusTooManyRequests {
+							cancle()
+						}
+					}
+
+					select {
+					case result <- send{finalUrl, status, links}:
+					case <-ctx.Done():
+						return
+					}
 				}
-				result <- links
 			}
 		}()
 	}
 
+	fetching := 1
 	for fetching > 0 {
-		newLinks := <-result
+		var d send
+		select {
+		case d = <-result:
+		case <-ctx.Done():
+			return graph, nil
+		}
+
+		currLink := d.parent
+		newLinks := d.links
+		status := d.status
+
 		fetching--
+
+		normalizedCurrLink, err := app.normalizeUrl(currLink)
+		if err != nil {
+			app.logger.Error(err)
+			continue
+		}
+
+		edge := &data.Edge{Visited: 1, Status: status}
+		graph[normalizedCurrLink] = edge
 
 		for _, link := range newLinks {
 
 			normalizedLink, err := app.normalizeUrl(link)
 			if err != nil {
+				app.logger.Error(err)
 				continue
 			}
 
-			if _, ok := pages[normalizedLink]; !ok {
-				pages[normalizedLink] = struct{}{}
-
-				fetching++
-				go func(l string) { workQueue <- l }(link)
+			edge.Links = append(edge.Links, normalizedLink)
+			if seen[normalizedLink] {
+				if e, ok := graph[normalizedLink]; ok {
+					e.Visited++
+				}
+				continue
 			}
+			seen[normalizedLink] = true
 
+			fetching++
+			go func(l string) {
+				select {
+				case workQueue <- l:
+				case <-ctx.Done():
+					return
+				}
+			}(link)
+
+		}
+		if len(graph) > 1000 {
+			break
 		}
 	}
 
-	close(workQueue)
-	close(result)
-
-	return pages, nil
+	return graph, nil
 }
