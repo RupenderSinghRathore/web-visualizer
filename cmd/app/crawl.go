@@ -68,7 +68,7 @@ func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]s
 	var links []string
 	tokenizer := html.NewTokenizer(body)
 
-	for i := 0; i < app.config.maxWidth; {
+	for {
 		tokenType := tokenizer.Next()
 		if tokenType == html.ErrorToken {
 			return links, nil
@@ -91,13 +91,11 @@ func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]s
 						}
 						link = linkStruct.String()
 						links = append(links, link)
-						i++
 					}
 				}
 			}
 		}
 	}
-	return links, nil
 }
 
 type send struct {
@@ -128,7 +126,7 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 	ctx, cancle := context.WithCancel(context.Background())
 	defer cancle()
 
-	for i := 0; i < app.config.concurrencyLimit; i++ {
+	for i := 0; i < app.config.crawl.maxGoroutine; i++ {
 		go func() {
 			for {
 				select {
@@ -154,7 +152,7 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 	}
 
 	fetching := 1
-	for fetching > 0 {
+	for fetching > 0 && len(graph) < app.config.crawl.maxPages {
 		var d send
 		select {
 		case d = <-result:
@@ -203,9 +201,6 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 				}
 			}(link)
 
-		}
-		if len(graph) > 1000 {
-			break
 		}
 	}
 

@@ -4,7 +4,9 @@ go 1.25.6
 
 require (
 	github.com/charmbracelet/log v0.4.2
+	github.com/go-chi/chi v1.5.5
 	golang.org/x/net v0.49.0
+	golang.org/x/time v0.14.0
 )
 
 require (
