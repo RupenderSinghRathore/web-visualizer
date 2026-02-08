@@ -15,7 +15,7 @@ func (app *application) recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				app.serverErrResponse(w, r, http.StatusInternalServerError, fmt.Errorf("%v", err))
+				app.errResponse(w, r, http.StatusInternalServerError, fmt.Errorf("%v", err))
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -49,7 +49,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 		if app.config.limiter.enabled {
 			ip, _, err := net.SplitHostPort(r.RemoteAddr)
 			if err != nil {
-				app.serverErrResponse(w, r, http.StatusInternalServerError, err)
+				app.errResponse(w, r, http.StatusInternalServerError, err)
 			}
 
 			mutex.Lock()
@@ -58,7 +58,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 				if !c.limiter.Allow() {
 					mutex.Unlock()
 					message := errors.New("rate limit exceeded")
-					app.serverErrResponse(w, r, http.StatusTooManyRequests, message)
+					app.errResponse(w, r, http.StatusTooManyRequests, message)
 
 					return
 				}

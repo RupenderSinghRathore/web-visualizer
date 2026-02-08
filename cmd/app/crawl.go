@@ -25,29 +25,29 @@ func (app *application) normalizeUrl(urlStr string) (string, error) {
 	if path != "" && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]
 	}
-	return host + path, nil
+	return path, nil
 }
 
-func (app *application) fetchLinks(urlStr string) (string, []string, int, error) {
+func (app *application) fetchLinks(urlStr string) (urlPacket, error) {
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		return "", nil, 0, err
+		return urlPacket{}, err
 	}
 	req.Header.Set("User-Agent", "WebVisualizer/1.0")
 	req.Header.Set("Accept", "text/html")
 
 	res, err := app.client.Do(req)
 	if err != nil {
-		return "", nil, 0, err
+		return urlPacket{}, err
 	}
 	defer res.Body.Close()
 
 	status := res.StatusCode
 	if status > 399 {
-		return "", nil, status, fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
+		return urlPacket{status: status}, fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
 	}
 	if !isHTML(res.Header.Get("content-type")) {
-		return "", nil, status, fmt.Errorf(
+		return urlPacket{status: status}, fmt.Errorf(
 			"%s: %s content-type",
 			urlStr,
 			res.Header.Get("content-type"),
@@ -57,7 +57,7 @@ func (app *application) fetchLinks(urlStr string) (string, []string, int, error)
 	finalUrl := res.Request.URL.String()
 
 	links, err := app.extractLinksFromBody(res.Body, finalUrl)
-	return finalUrl, links, status, err
+	return urlPacket{finalUrl, status, links}, err
 }
 
 func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]string, error) {
@@ -98,7 +98,7 @@ func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]s
 	}
 }
 
-type send struct {
+type urlPacket struct {
 	parent string
 	status int
 	links  []string
@@ -119,7 +119,7 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 	seen := make(map[string]bool)
 	seen[normalizedBase] = true
 
-	result := make(chan send)
+	result := make(chan urlPacket)
 	workQueue := make(chan string, 100)
 	workQueue <- urlB.String()
 
@@ -133,16 +133,16 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 				case <-ctx.Done():
 					return
 				case urlStr := <-workQueue:
-					finalUrl, links, status, err := app.fetchLinks(urlStr)
+					packet, err := app.fetchLinks(urlStr)
 					if err != nil {
 						app.logger.Error(err)
-						if status == http.StatusTooManyRequests {
+						if packet.status == http.StatusTooManyRequests {
 							cancle()
 						}
 					}
 
 					select {
-					case result <- send{finalUrl, status, links}:
+					case result <- packet:
 					case <-ctx.Done():
 						return
 					}
@@ -153,16 +153,16 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 
 	fetching := 1
 	for fetching > 0 && len(graph) < app.config.crawl.maxPages {
-		var d send
+		var packet urlPacket
 		select {
-		case d = <-result:
+		case packet = <-result:
 		case <-ctx.Done():
 			return graph, nil
 		}
 
-		currLink := d.parent
-		newLinks := d.links
-		status := d.status
+		currLink := packet.parent
+		newLinks := packet.links
+		status := packet.status
 
 		fetching--
 

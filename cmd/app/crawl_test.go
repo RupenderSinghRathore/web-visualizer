@@ -21,27 +21,27 @@ func TestNormalizeUrl(t *testing.T) {
 		{
 			name:     "standard http url",
 			input:    "http://google.com/pages",
-			expected: "google.com/pages",
+			expected: "/pages",
 		},
 		{
 			name:     "standard https url",
 			input:    "https://google.com/pages",
-			expected: "google.com/pages",
+			expected: "/pages",
 		},
 		{
 			name:     "url with query parameters",
 			input:    "https://google.com/pages?page=3",
-			expected: "google.com/pages",
+			expected: "/pages",
 		},
 		{
 			name:     "url with trailing /",
 			input:    "https://google.com/pages/",
-			expected: "google.com/pages",
+			expected: "/pages",
 		},
 		{
 			name:     "url with capitals",
 			input:    "https://GOOgle.com/pages",
-			expected: "google.com/pages",
+			expected: "/pages",
 		},
 	}
 

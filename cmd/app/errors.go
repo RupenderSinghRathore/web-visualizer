@@ -2,7 +2,7 @@ package main
 
 import "net/http"
 
-func (app *application) serverErrResponse(
+func (app *application) errResponse(
 	w http.ResponseWriter,
 	r *http.Request,
 	status int,
