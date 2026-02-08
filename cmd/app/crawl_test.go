@@ -165,7 +165,7 @@ func TestExtractLinksFromBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := application{config: confugration{maxWidth: 100}}
+			app := application{}
 			reader := strings.NewReader(tt.htmlBody)
 
 			got, err := app.extractLinksFromBody(reader, tt.baseUrl)

@@ -14,6 +14,7 @@ func (app *application) routes() http.Handler {
 	r.Use(app.rateLimit)
 
 	r.Get("/healthcheck", app.healthcheckHandler)
+	r.Get("/", app.homePageHandler)
 
 	return r
 }
