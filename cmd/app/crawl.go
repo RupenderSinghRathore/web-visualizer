@@ -47,11 +47,12 @@ func (app *application) fetchLinks(urlStr string) (urlPacket, error) {
 		return urlPacket{status: status}, fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
 	}
 	if !isHTML(res.Header.Get("content-type")) {
-		return urlPacket{status: status}, fmt.Errorf(
-			"%s: %s content-type",
-			urlStr,
-			res.Header.Get("content-type"),
-		)
+		// return urlPacket{status: status}, fmt.Errorf(
+		// 	"%s: %s content-type",
+		// 	urlStr,
+		// 	res.Header.Get("content-type"),
+		// )
+		return urlPacket{status: status}, nil
 	}
 
 	finalUrl := res.Request.URL.String()
@@ -104,12 +105,7 @@ type urlPacket struct {
 	links  []string
 }
 
-func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
-	urlB, err := url.ParseRequestURI(baseUrl)
-	if err != nil {
-		return nil, err
-	}
-
+func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 	normalizedBase, err := app.normalizeUrl(urlB.String())
 	if err != nil {
 		return nil, err
@@ -172,7 +168,7 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 			continue
 		}
 
-		edge := &data.Edge{Visited: 1, Status: status}
+		edge := &data.Edge{Visited: 1, Status: status, Links: map[string]struct{}{}}
 		graph[normalizedCurrLink] = edge
 
 		for _, link := range newLinks {
@@ -183,7 +179,7 @@ func (app *application) crawlPage(baseUrl string) (data.Graph, error) {
 				continue
 			}
 
-			edge.Links = append(edge.Links, normalizedLink)
+			edge.Links[normalizedLink] = struct{}{}
 			if seen[normalizedLink] {
 				if e, ok := graph[normalizedLink]; ok {
 					e.Visited++

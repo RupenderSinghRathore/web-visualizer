@@ -19,6 +19,11 @@ func TestNormalizeUrl(t *testing.T) {
 			expected: "",
 		},
 		{
+			name:     "base url",
+			input:    "http://google.com/",
+			expected: "",
+		},
+		{
 			name:     "standard http url",
 			input:    "http://google.com/pages",
 			expected: "/pages",

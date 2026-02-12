@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -21,9 +22,14 @@ func (app *application) drawGraphHandler(w http.ResponseWriter, r *http.Request)
 		app.errResponse(w, r, http.StatusBadRequest, err)
 	}
 	endpoint := r.PostForm.Get("url")
-	graph, err := app.crawlPage(endpoint)
+	validUrl, err := url.ParseRequestURI(endpoint)
+	if err != nil {
+		app.errResponse(w, r, http.StatusBadRequest, err)
+	}
+	graph, err := app.crawlPage(validUrl)
 
 	if err != nil {
 	}
+	pages.DrawMapTree(graph, validUrl.Path).Render(context.Background(), w)
 	pages.DrawGraph(graph).Render(context.Background(), w)
 }

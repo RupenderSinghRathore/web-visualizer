@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -70,13 +72,39 @@ func main() {
 		},
 	}
 	if *urlc != "" {
-		// graph, err := app.crawlPage(*urlc)
-		// if err != nil {
-		// 	logger.Error(err)
-		// }
-		// for endPoint, edge := range graph {
-		// 	fmt.Printf("%s(%d, %d) -> %v\n", endPoint, edge.Visited, edge.Status, edge.Links)
-		// }
+		go func() {
+			for {
+				t := 100 * time.Millisecond
+				for _, r := range `-\|/` {
+					fmt.Printf("\r%c", r)
+					time.Sleep(t)
+				}
+			}
+		}()
+
+		urlB, err := url.ParseRequestURI(*urlc)
+		if err != nil {
+			logger.Error(err)
+		}
+		graph, err := app.crawlPage(urlB)
+		if err != nil {
+			logger.Error(err)
+		}
+		for endPoint, edge := range graph {
+			if endPoint == "" {
+				endPoint = "/"
+			}
+			fmt.Printf("%s(%d, %d) -> [ ", endPoint, edge.Visited, edge.Status)
+			for link := range edge.Links {
+				if link == "" {
+					fmt.Printf("%s ", "/")
+				} else {
+					fmt.Printf("%s ", link)
+				}
+			}
+			fmt.Printf("]\n\n")
+		}
+		os.Exit(0)
 	}
 
 	if err := app.serve(); err != nil {
