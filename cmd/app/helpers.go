@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"mime"
 	"os"
 	"time"
 )
@@ -32,4 +33,8 @@ func (app *application) spinningAnimation(ch <-chan struct{}) {
 			i = (i + 1) % n
 		}
 	}
+}
+func isHTML(contentType string) bool {
+	mediaType, _, _ := mime.ParseMediaType(contentType)
+	return mediaType == "text/html"
 }

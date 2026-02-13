@@ -18,8 +18,8 @@ func (app *application) routes() http.Handler {
 
 	r.Get("/healthcheck", app.healthcheckHandler)
 
-	r.Get("/", app.homePageHandler)
-	r.Post("/graph", app.drawGraphHandler)
+	// r.Get("/", app.homePageHandler)
+	// r.Post("/graph", app.drawGraphHandler)
 
 	return r
 }

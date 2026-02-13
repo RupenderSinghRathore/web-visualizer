@@ -1,12 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"flag"
-	"fmt"
-	"mime"
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -21,8 +17,9 @@ type application struct {
 	wg     sync.WaitGroup
 }
 type confugration struct {
-	port  int
-	crawl struct {
+	port   int
+	urlStr string
+	crawl  struct {
 		maxGoroutine,
 		maxDepth int
 		maxPages int
@@ -35,105 +32,51 @@ type confugration struct {
 	}
 }
 
-func isHTML(contentType string) bool {
-	mediaType, _, _ := mime.ParseMediaType(contentType)
-	return mediaType == "text/html"
-}
-
 func main() {
-	var cfg confugration
-
-	urlc := flag.String("url", "", "url to crawl")
-
-	flag.IntVar(&cfg.port, "port", 8080, "Port to be used")
-	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
-
-	flag.IntVar(
-		&cfg.crawl.maxGoroutine,
-		"concurrency",
-		20,
-		"max goroutines for crawler",
-	)
-	flag.IntVar(&cfg.crawl.maxDepth, "max-depth", 100, "max width of the links graph")
-	flag.IntVar(&cfg.crawl.maxPages, "max-pages", 1000, "max width of the links graph")
-
-	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
-	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
-	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
-
-	flag.Parse()
-
 	logger := log.New(os.Stdout)
 	logger.SetTimeFormat(time.DateTime)
 	logger.SetReportTimestamp(true)
 
+	if len(os.Args) < 2 {
+		logger.Error("not enough args: use 'server' or 'crawl'")
+		os.Exit(1)
+	}
+
+	var cfg confugration
+
 	app := application{
 		logger: logger,
-		config: &cfg,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		config: &cfg,
 	}
-	if *urlc != "" {
-		if err := app.printGraph(*urlc); err != nil {
+
+	switch os.Args[1] {
+	case "crawl":
+		crawlCmd := flag.NewFlagSet("crawl", flag.ContinueOnError)
+
+		crawlFlags(crawlCmd, &cfg)
+		commonFlags(crawlCmd, &cfg)
+		crawlCmd.Parse(os.Args[2:])
+
+		if err := app.printGraph(app.config.urlStr); err != nil {
 			app.crashErr(err)
 		}
-		os.Exit(0)
-	}
 
-	if err := app.serve(); err != nil {
-		app.crashErr(err)
-	}
-}
+	case "server":
+		serverCmd := flag.NewFlagSet("server", flag.ContinueOnError)
 
-func (app *application) printGraph(urlStr string) error {
-	stopSpinner := make(chan struct{})
+		serverFlags(serverCmd, &cfg)
+		commonFlags(serverCmd, &cfg)
+		serverCmd.Parse(os.Args[2:])
 
-	app.wg.Add(1)
-	go app.spinningAnimation(stopSpinner)
-
-	var stopOnce sync.Once
-	stopAnimation := func() {
-		stopOnce.Do(func() {
-			close(stopSpinner)
-			app.wg.Wait()
-			fmt.Fprintf(os.Stderr, EraseLineANSI)
-		})
-	}
-	defer stopAnimation()
-
-	urlB, err := url.ParseRequestURI(urlStr)
-	if err != nil {
-		return err
-	}
-	graph, err := app.crawlPage(urlB)
-	if err != nil {
-		return err
-	}
-
-	writer := bufio.NewWriter(os.Stdout)
-	defer writer.Flush()
-
-	stopAnimation()
-
-	for endPoint, edge := range graph {
-		_, err = fmt.Fprintf(writer, "%s(%d, %d) -> [ ", endPoint, edge.Visited, edge.Status)
-		if err != nil {
-			return err
+		if err := app.serve(); err != nil {
+			app.crashErr(err)
 		}
 
-		for link := range edge.Links {
-			_, err = fmt.Fprintf(writer, "%s ", link)
-			if err != nil {
-				return err
-			}
-		}
-
-		_, err = fmt.Fprintf(writer, "]\n\n")
-		if err != nil {
-			return err
-		}
+	default:
+		logger.Errorf("unknown arg: %s", os.Args[1])
+		os.Exit(1)
 	}
-
-	return nil
 }
