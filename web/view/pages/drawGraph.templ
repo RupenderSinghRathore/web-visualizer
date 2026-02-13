@@ -1,0 +1,154 @@
+package pages
+
+import (
+	"RupenderSinghRathore/web-visualizer/internal/data"
+	"fmt"
+	"sort"
+)
+
+// 2. Helper: Sorts keys and prevents infinite loops
+// (Skips links that point back to the immediate parent or self)
+func getSortedChildren(graph data.Graph, currentKey string, parentKey string) []string {
+	edge, ok := graph[currentKey]
+	if !ok || edge.Links == nil {
+		return nil
+	}
+
+	keys := make([]string, 0, len(edge.Links))
+	for k := range edge.Links {
+		// 1. Don't link to self
+		// 2. Don't link back to the immediate parent (e.g. /tags/go -> /tags)
+		if k != currentKey && k != parentKey {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys) // Sort for consistent order
+	return keys
+}
+
+// 3. The Recursive Node Component
+templ TreeNode(graph data.Graph, currentKey string, parentKey string) {
+	<li>
+		<a href="#">
+			// The Node Title (The URL path)
+			<div class="font-bold text-lg">{ currentKey }</div>
+			{ fmt.Printf("correntKey: %v\n", currentKey) }
+			// Optional: Display Stats from your Edge struct
+			if edge, ok := graph[currentKey]; ok {
+				<div class="text-xs opacity-80 mt-1">
+					Visited: { fmt.Sprintf("%d", edge.Visited) } | Status: { fmt.Sprintf("%d", edge.Status) }
+				</div>
+			}
+		</a>
+		// Recursion: Check if we have valid children
+		<ul>
+			for _, childKey := range getSortedChildren(graph, currentKey, parentKey) {
+				@TreeNode(graph, childKey, currentKey)
+			}
+		</ul>
+	</li>
+}
+
+// 4. The Main Entry Point
+// Usage: @DrawMapTree(myGraph, "/tags") <--- Pass the root key you want to start from
+templ DrawMapTree(graph data.Graph, rootKey string) {
+	<div class="tree-container">
+		// <style>
+		// 	/* CSS for the Tree Structure */
+		// 	.tree-container {
+		// 		display: flex;
+		// 		justify-content: center;
+		// 		padding: 40px;
+		// 		background: #111118;
+		// 		min-height: 100vh;
+		// 	}
+		// 	.tree ul {
+		// 		padding-top: 20px;
+		// 		position: relative;
+		// 		display: flex;
+		// 		justify-content: center;
+		// 	}
+		// 	.tree li {
+		// 		float: left;
+		// 		text-align: center;
+		// 		list-style-type: none;
+		// 		position: relative;
+		// 		padding: 20px 10px 0 10px;
+		// 	}
+		//
+		// 	/* Connectors */
+		// 	.tree li::before,
+		// 	.tree li::after {
+		// 		content: "";
+		// 		position: absolute;
+		// 		top: 0;
+		// 		right: 50%;
+		// 		border-top: 2px solid #aeb5d1;
+		// 		width: 50%;
+		// 		height: 20px;
+		// 	}
+		// 	.tree li::after {
+		// 		right: auto;
+		// 		left: 50%;
+		// 		border-left: 2px solid #aeb5d1;
+		// 	}
+		// 	.tree li:only-child::after,
+		// 	.tree li:only-child::before {
+		// 		display: none;
+		// 	}
+		// 	.tree li:only-child {
+		// 		padding-top: 0;
+		// 	}
+		// 	.tree li:first-child::before,
+		// 	.tree li:last-child::after {
+		// 		border: 0 none;
+		// 	}
+		// 	.tree li:last-child::before {
+		// 		border-right: 2px solid #aeb5d1;
+		// 		border-radius: 0 5px 0 0;
+		// 	}
+		// 	.tree li:first-child::after {
+		// 		border-radius: 5px 0 0 0;
+		// 	}
+		// 	.tree ul ul::before {
+		// 		content: "";
+		// 		position: absolute;
+		// 		top: 0;
+		// 		left: 50%;
+		// 		border-left: 2px solid #aeb5d1;
+		// 		width: 0;
+		// 		height: 20px;
+		// 	}
+		//
+		// 	/* Node Cards */
+		// 	.tree li a {
+		// 		background: #2a3b90;
+		// 		color: #fff;
+		// 		padding: 15px 20px;
+		// 		text-decoration: none;
+		// 		border-radius: 5px;
+		// 		display: inline-block;
+		// 		border-bottom: 4px solid #fff;
+		// 		transition: all 0.3s;
+		// 		min-width: 150px;
+		// 		font-family: sans-serif;
+		// 	}
+		// 	.tree li a:hover {
+		// 		background: #4a5bbf;
+		// 		transform: translateY(-2px);
+		// 	}
+		// 	.tree li a:hover + ul li::after,
+		// 	.tree li a:hover + ul li::before,
+		// 	.tree li a:hover + ul::before,
+		// 	.tree li a:hover + ul ul::before {
+		// 		border-color: #fff;
+		// 	}
+		// </style>
+		<div class="tree">
+			<ul>
+				// Start the recursion
+				@TreeNode(graph, rootKey, "")
+			</ul>
+		</div>
+	</div>
+}
