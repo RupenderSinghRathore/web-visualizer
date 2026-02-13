@@ -7,22 +7,19 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
+	"os"
 
 	"golang.org/x/net/html"
 )
 
-func (app *application) normalizeUrl(urlStr string) (string, error) {
+func (app *application) stripUrl(urlStr string) (string, error) {
 	urlStruct, err := url.Parse(urlStr)
 	if err != nil {
 		return "", err
 	}
-	host := urlStruct.Hostname()
-	if host != "" {
-		host = strings.ToLower(host)
-	}
 	path := urlStruct.Path
-	if path != "" && path[len(path)-1] == '/' {
+
+	if len(path) > 0 && path != "/" && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]
 	}
 	return path, nil
@@ -47,12 +44,12 @@ func (app *application) fetchLinks(urlStr string) (urlPacket, error) {
 		return urlPacket{status: status}, fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
 	}
 	if !isHTML(res.Header.Get("content-type")) {
-		// return urlPacket{status: status}, fmt.Errorf(
-		// 	"%s: %s content-type",
-		// 	urlStr,
-		// 	res.Header.Get("content-type"),
-		// )
-		return urlPacket{status: status}, nil
+		return urlPacket{status: status}, fmt.Errorf(
+			"%s: %s content-type",
+			urlStr,
+			res.Header.Get("content-type"),
+		)
+		// return urlPacket{status: status}, nil
 	}
 
 	finalUrl := res.Request.URL.String()
@@ -106,7 +103,7 @@ type urlPacket struct {
 }
 
 func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
-	normalizedBase, err := app.normalizeUrl(urlB.String())
+	normalizedBase, err := app.stripUrl(urlB.String())
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +128,7 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 				case urlStr := <-workQueue:
 					packet, err := app.fetchLinks(urlStr)
 					if err != nil {
+						fmt.Fprintf(os.Stderr, EraseLineANSI)
 						app.logger.Error(err)
 						if packet.status == http.StatusTooManyRequests {
 							cancle()
@@ -162,7 +160,7 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 
 		fetching--
 
-		normalizedCurrLink, err := app.normalizeUrl(currLink)
+		normalizedCurrLink, err := app.stripUrl(currLink)
 		if err != nil {
 			app.logger.Error(err)
 			continue
@@ -173,7 +171,7 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 
 		for _, link := range newLinks {
 
-			normalizedLink, err := app.normalizeUrl(link)
+			normalizedLink, err := app.stripUrl(link)
 			if err != nil {
 				app.logger.Error(err)
 				continue

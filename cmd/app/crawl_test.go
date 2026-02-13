@@ -21,7 +21,7 @@ func TestNormalizeUrl(t *testing.T) {
 		{
 			name:     "base url",
 			input:    "http://google.com/",
-			expected: "",
+			expected: "/",
 		},
 		{
 			name:     "standard http url",
@@ -53,7 +53,7 @@ func TestNormalizeUrl(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := application{}
-			got, err := app.normalizeUrl(tt.input)
+			got, err := app.stripUrl(tt.input)
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error for input %v, but got none", tt.input)

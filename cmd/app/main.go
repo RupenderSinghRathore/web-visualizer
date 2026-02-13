@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -16,6 +18,7 @@ type application struct {
 	logger *log.Logger
 	config *confugration
 	client *http.Client
+	wg     sync.WaitGroup
 }
 type confugration struct {
 	port  int
@@ -72,43 +75,65 @@ func main() {
 		},
 	}
 	if *urlc != "" {
-		go func() {
-			for {
-				t := 100 * time.Millisecond
-				for _, r := range `-\|/` {
-					fmt.Printf("\r%c", r)
-					time.Sleep(t)
-				}
-			}
-		}()
-
-		urlB, err := url.ParseRequestURI(*urlc)
-		if err != nil {
-			logger.Error(err)
-		}
-		graph, err := app.crawlPage(urlB)
-		if err != nil {
-			logger.Error(err)
-		}
-		for endPoint, edge := range graph {
-			if endPoint == "" {
-				endPoint = "/"
-			}
-			fmt.Printf("%s(%d, %d) -> [ ", endPoint, edge.Visited, edge.Status)
-			for link := range edge.Links {
-				if link == "" {
-					fmt.Printf("%s ", "/")
-				} else {
-					fmt.Printf("%s ", link)
-				}
-			}
-			fmt.Printf("]\n\n")
+		if err := app.printGraph(*urlc); err != nil {
+			app.crashErr(err)
 		}
 		os.Exit(0)
 	}
 
 	if err := app.serve(); err != nil {
-		logger.Error(err)
-		os.Exit(1)
+		app.crashErr(err)
 	}
+}
+
+func (app *application) printGraph(urlStr string) error {
+	stopSpinner := make(chan struct{})
+
+	app.wg.Add(1)
+	go app.spinningAnimation(stopSpinner)
+
+	var stopOnce sync.Once
+	stopAnimation := func() {
+		stopOnce.Do(func() {
+			close(stopSpinner)
+			app.wg.Wait()
+			fmt.Fprintf(os.Stderr, EraseLineANSI)
+		})
+	}
+	defer stopAnimation()
+
+	urlB, err := url.ParseRequestURI(urlStr)
+	if err != nil {
+		return err
+	}
+	graph, err := app.crawlPage(urlB)
+	if err != nil {
+		return err
+	}
+
+	writer := bufio.NewWriter(os.Stdout)
+	defer writer.Flush()
+
+	stopAnimation()
+
+	for endPoint, edge := range graph {
+		_, err = fmt.Fprintf(writer, "%s(%d, %d) -> [ ", endPoint, edge.Visited, edge.Status)
+		if err != nil {
+			return err
+		}
+
+		for link := range edge.Links {
+			_, err = fmt.Fprintf(writer, "%s ", link)
+			if err != nil {
+				return err
+			}
+		}
+
+		_, err = fmt.Fprintf(writer, "]\n\n")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
