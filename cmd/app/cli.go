@@ -52,14 +52,15 @@ func (app *application) printGraph(urlStr string) error {
 
 	stopSpinner := make(chan struct{})
 
-	app.wg.Add(1)
-	go app.spinningAnimation(stopSpinner)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go app.spinningAnimation(stopSpinner, &wg)
 
 	var stopOnce sync.Once
 	stopAnimation := func() {
 		stopOnce.Do(func() {
 			close(stopSpinner)
-			app.wg.Wait()
+			wg.Wait()
 			fmt.Fprintf(os.Stderr, EraseLineANSI)
 		})
 	}
@@ -85,7 +86,7 @@ func (app *application) printGraph(urlStr string) error {
 			return err
 		}
 
-		for link := range edge.Links {
+		for _, link := range edge.Links {
 			_, err = fmt.Fprintf(writer, "%s ", link)
 			if err != nil {
 				return err

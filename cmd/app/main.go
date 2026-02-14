@@ -4,7 +4,6 @@ import (
 	"flag"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -14,7 +13,6 @@ type application struct {
 	logger *log.Logger
 	config *confugration
 	client *http.Client
-	wg     sync.WaitGroup
 }
 type confugration struct {
 	port   int

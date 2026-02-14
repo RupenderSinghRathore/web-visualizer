@@ -3,67 +3,101 @@ package main
 import (
 	"RupenderSinghRathore/web-visualizer/internal/data"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
+	"sync"
 
 	"golang.org/x/net/html"
 )
 
-func (app *application) stripUrl(urlStr string) (string, error) {
-	urlStruct, err := url.Parse(urlStr)
+type crawlResult struct {
+	parent string
+	links  []string
+	status int
+	err    error
+}
+
+func (app *application) getPath(resolvedUrlStr string) (string, error) {
+	urlStruct, err := url.Parse(resolvedUrlStr)
 	if err != nil {
 		return "", err
 	}
+	if !urlStruct.IsAbs() {
+		return "", errors.New("non absolute url")
+	}
 	path := urlStruct.Path
 
-	if len(path) > 0 && path != "/" && path[len(path)-1] == '/' {
+	if len(path) == 0 {
+		path = "/"
+	}
+
+	if path != "/" && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]
 	}
 	return path, nil
 }
 
-func (app *application) fetchLinks(urlStr string) (urlPacket, error) {
+func (app *application) fetch(urlStr string) *crawlResult {
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		return urlPacket{}, err
+		return &crawlResult{parent: urlStr, err: err}
 	}
 	req.Header.Set("User-Agent", "WebVisualizer/1.0")
 	req.Header.Set("Accept", "text/html")
 
 	res, err := app.client.Do(req)
 	if err != nil {
-		return urlPacket{}, err
+		return &crawlResult{parent: urlStr, err: err}
 	}
 	defer res.Body.Close()
 
 	status := res.StatusCode
 	if status > 399 {
-		return urlPacket{status: status}, fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
+		return &crawlResult{parent: urlStr, status: status, err: fmt.Errorf(
+			"%s: %d status code",
+			urlStr,
+			res.StatusCode,
+		)}
 	}
 	if !isHTML(res.Header.Get("content-type")) {
-		return urlPacket{status: status}, fmt.Errorf(
+		return &crawlResult{parent: urlStr, status: status, err: fmt.Errorf(
 			"%s: %s content-type",
 			urlStr,
 			res.Header.Get("content-type"),
-		)
-		// return urlPacket{status: status}, nil
+		)}
+		// return &crawlResult{parent: urlStr, status: status, err: nil}
 	}
 
-	finalUrl := res.Request.URL.String()
+	finalUrl := res.Request.URL
 
-	links, err := app.extractLinksFromBody(res.Body, finalUrl)
-	return urlPacket{finalUrl, status, links}, err
+	linksMap, err := app.extractLinksFromBody(res.Body, finalUrl)
+
+	links := make([]string, 0, len(linksMap))
+	for link := range maps.Keys(linksMap) {
+		if link != urlStr && link != finalUrl.String() {
+			links = append(links, link)
+		}
+	}
+	slices.Sort(links)
+
+	return &crawlResult{
+		parent: urlStr,
+		status: status,
+		links:  links,
+	}
 }
 
-func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]string, error) {
-	baseUrl, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
-	var links []string
+func (app *application) extractLinksFromBody(
+	body io.Reader,
+	baseUrl *url.URL,
+) (map[string]struct{}, error) {
+	links := map[string]struct{}{}
 	tokenizer := html.NewTokenizer(body)
 
 	for {
@@ -78,17 +112,17 @@ func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]s
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
 						link := attr.Val
-						linkStruct, err := url.Parse(link)
+						resolvedLink, err := url.Parse(link)
 						if err != nil {
 							app.logger.Error(err)
 							continue
 						}
-						linkStruct = baseUrl.ResolveReference(linkStruct)
-						if linkStruct.Hostname() != baseUrl.Hostname() {
+						resolvedLink = baseUrl.ResolveReference(resolvedLink)
+						if resolvedLink.Hostname() != baseUrl.Hostname() {
 							continue
 						}
-						link = linkStruct.String()
-						links = append(links, link)
+						link = resolvedLink.String()
+						links[link] = struct{}{}
 					}
 				}
 			}
@@ -96,95 +130,87 @@ func (app *application) extractLinksFromBody(body io.Reader, urlStr string) ([]s
 	}
 }
 
-type urlPacket struct {
-	parent string
-	status int
-	links  []string
-}
-
 func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
-	normalizedBase, err := app.stripUrl(urlB.String())
+	normalizedBase, err := app.getPath(urlB.String())
 	if err != nil {
 		return nil, err
 	}
 
 	graph := data.Graph{}
 	seen := make(map[string]bool)
-	seen[normalizedBase] = true
 
-	result := make(chan urlPacket)
+	results := make(chan *crawlResult)
 	workQueue := make(chan string, 100)
+
+	seen[normalizedBase] = true
 	workQueue <- urlB.String()
 
 	ctx, cancle := context.WithCancel(context.Background())
 	defer cancle()
 
+	wg := sync.WaitGroup{}
 	for i := 0; i < app.config.crawl.maxGoroutine; i++ {
-		go func() {
+		wg.Go(func() {
 			for {
 				select {
 				case <-ctx.Done():
 					return
 				case urlStr := <-workQueue:
-					packet, err := app.fetchLinks(urlStr)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, EraseLineANSI)
-						app.logger.Error(err)
-						if packet.status == http.StatusTooManyRequests {
-							cancle()
-						}
-					}
-
+					result := app.fetch(urlStr)
 					select {
-					case result <- packet:
+					case results <- result:
 					case <-ctx.Done():
 						return
 					}
 				}
 			}
-		}()
+		})
+
 	}
 
 	fetching := 1
 	for fetching > 0 && len(graph) < app.config.crawl.maxPages {
-		var packet urlPacket
+		var result *crawlResult
 		select {
-		case packet = <-result:
+		case result = <-results:
 		case <-ctx.Done():
-			return graph, nil
+			break
 		}
-
-		currLink := packet.parent
-		newLinks := packet.links
-		status := packet.status
-
 		fetching--
 
-		normalizedCurrLink, err := app.stripUrl(currLink)
+		if result.err != nil {
+			fmt.Fprintf(os.Stderr, EraseLineANSI)
+			app.logger.Error(result.err)
+			if result.status == http.StatusTooManyRequests {
+				cancle()
+			}
+		}
+
+		normParent, err := app.getPath(result.parent)
 		if err != nil {
 			app.logger.Error(err)
 			continue
 		}
 
-		edge := &data.Edge{Visited: 1, Status: status, Links: map[string]struct{}{}}
-		graph[normalizedCurrLink] = edge
+		edge := &data.Edge{Visited: 1, Status: result.status, Links: []string{}}
+		graph[normParent] = edge
 
-		for _, link := range newLinks {
+		for _, link := range result.links {
 
-			normalizedLink, err := app.stripUrl(link)
+			normLink, err := app.getPath(link)
 			if err != nil {
 				app.logger.Error(err)
 				continue
 			}
 
-			edge.Links[normalizedLink] = struct{}{}
-			if seen[normalizedLink] {
-				if e, ok := graph[normalizedLink]; ok {
+			edge.Links = append(edge.Links, normLink)
+			if seen[normLink] {
+				if e, ok := graph[normLink]; ok {
 					e.Visited++
 				}
 				continue
 			}
-			seen[normalizedLink] = true
+			seen[normLink] = true
 
 			fetching++
 			go func(l string) {
@@ -197,6 +223,9 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 
 		}
 	}
+
+	cancle()
+	wg.Wait()
 
 	return graph, nil
 }

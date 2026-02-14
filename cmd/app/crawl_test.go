@@ -16,11 +16,11 @@ func TestNormalizeUrl(t *testing.T) {
 		{
 			name:     "empty url",
 			input:    "",
-			expected: "",
+			expectError: true,
 		},
 		{
 			name:     "base url",
-			input:    "http://google.com/",
+			input:    "http://google.com",
 			expected: "/",
 		},
 		{
@@ -53,7 +53,7 @@ func TestNormalizeUrl(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := application{}
-			got, err := app.stripUrl(tt.input)
+			got, err := app.getPath(tt.input)
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error for input %v, but got none", tt.input)
@@ -81,20 +81,20 @@ func TestExtractLinksFromBody(t *testing.T) {
 		name        string
 		htmlBody    string
 		baseUrl     string
-		expected    []string
+		expected    map[string]struct{}
 		expectError bool
 	}{
 		{
 			name:     "empty html",
 			htmlBody: "",
 			baseUrl:  "https://google.com/pages",
-			expected: nil,
+			expected: map[string]struct{}{},
 		},
 		{
 			name:     "no url",
 			htmlBody: `<html><body></body></html>`,
 			baseUrl:  "https://google.com/pages",
-			expected: nil,
+			expected: map[string]struct{}{},
 		},
 		{
 			name: "single url",
@@ -106,7 +106,7 @@ func TestExtractLinksFromBody(t *testing.T) {
 			</html>
 			`,
 			baseUrl:  "https://www.google.com",
-			expected: []string{"https://www.google.com/"},
+			expected: map[string]struct{}{"https://www.google.com/": {}},
 		},
 		{
 			name: "multiple urls",
@@ -121,9 +121,9 @@ func TestExtractLinksFromBody(t *testing.T) {
 			</html>
 			`,
 			baseUrl: "https://www.google.com",
-			expected: []string{
-				"https://www.google.com/",
-				"https://www.google.com/pages",
+			expected: map[string]struct{}{
+				"https://www.google.com/":      {},
+				"https://www.google.com/pages": {},
 			},
 		},
 		{
@@ -135,8 +135,10 @@ func TestExtractLinksFromBody(t *testing.T) {
 			  </body>
 			</html>
 			`,
-			baseUrl:  "https://google.com",
-			expected: []string{"https://google.com/pages/"},
+			baseUrl: "https://google.com",
+			expected: map[string]struct{}{
+				"https://google.com/pages/": {},
+			},
 		},
 		{
 			name: "both urls",
@@ -149,9 +151,9 @@ func TestExtractLinksFromBody(t *testing.T) {
 			</html>
 			`,
 			baseUrl: "https://www.google.com",
-			expected: []string{
-				"https://www.google.com/",
-				"https://www.google.com/pages/",
+			expected: map[string]struct{}{
+				"https://www.google.com/":       {},
+				"https://www.google.com/pages/": {},
 			},
 		},
 		{
@@ -163,8 +165,10 @@ func TestExtractLinksFromBody(t *testing.T) {
 			  </body>
 			</html>
 			`,
-			baseUrl:  "https://www.google.com",
-			expected: []string{"https://www.google.com/foo.html"},
+			baseUrl: "https://www.google.com",
+			expected: map[string]struct{}{
+				"https://www.google.com/foo.html": {},
+			},
 		},
 	}
 

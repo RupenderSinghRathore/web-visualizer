@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"mime"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -15,8 +16,8 @@ func (app *application) crashErr(err error) {
 	app.logger.Error(err)
 	os.Exit(1)
 }
-func (app *application) spinningAnimation(ch <-chan struct{}) {
-	defer app.wg.Done()
+func (app *application) spinningAnimation(ch <-chan struct{}, wg *sync.WaitGroup) {
+	wg.Done()
 	spinner := `-\|/`
 	n := len(spinner)
 

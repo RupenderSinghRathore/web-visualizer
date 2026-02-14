@@ -3,7 +3,7 @@ package data
 type Edge struct {
 	Visited int
 	Status  int
-	Links   map[string]struct{}
+	Links   []string
 }
 
 type Graph map[string]*Edge
