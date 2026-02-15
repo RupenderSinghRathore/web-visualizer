@@ -1,9 +1,9 @@
 package data
 
 type Edge struct {
-	Visited int
-	Status  int
-	Links   []string
+	Visited int      `json:"visited"`
+	Status  int      `json:"Status"`
+	Links   []string `json:"links"`
 }
 
 type Graph map[string]*Edge

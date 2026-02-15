@@ -3,10 +3,8 @@ package main
 import (
 	"RupenderSinghRathore/web-visualizer/internal/data"
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,14 +21,7 @@ type crawlResult struct {
 	err    error
 }
 
-func (app *application) getPath(resolvedUrlStr string) (string, error) {
-	urlStruct, err := url.Parse(resolvedUrlStr)
-	if err != nil {
-		return "", err
-	}
-	if !urlStruct.IsAbs() {
-		return "", errors.New("non absolute url")
-	}
+func (app *application) getPath(urlStruct *url.URL) string {
 	path := urlStruct.Path
 
 	if len(path) == 0 {
@@ -40,7 +31,7 @@ func (app *application) getPath(resolvedUrlStr string) (string, error) {
 	if path != "/" && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]
 	}
-	return path, nil
+	return path
 }
 
 func (app *application) fetch(urlStr string) *crawlResult {
@@ -79,7 +70,7 @@ func (app *application) fetch(urlStr string) *crawlResult {
 	linksMap, err := app.extractLinksFromBody(res.Body, finalUrl)
 
 	links := make([]string, 0, len(linksMap))
-	for link := range maps.Keys(linksMap) {
+	for link := range linksMap {
 		if link != urlStr && link != finalUrl.String() {
 			links = append(links, link)
 		}
@@ -130,11 +121,8 @@ func (app *application) extractLinksFromBody(
 	}
 }
 
-func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
-	normalizedBase, err := app.getPath(urlB.String())
-	if err != nil {
-		return nil, err
-	}
+func (app *application) crawlPage(urlB *url.URL) data.Graph {
+	normalizedBase := app.getPath(urlB)
 
 	graph := data.Graph{}
 	seen := make(map[string]bool)
@@ -169,12 +157,13 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 	}
 
 	fetching := 1
+out:
 	for fetching > 0 && len(graph) < app.config.crawl.maxPages {
 		var result *crawlResult
 		select {
 		case result = <-results:
 		case <-ctx.Done():
-			break
+			break out
 		}
 		fetching--
 
@@ -186,7 +175,8 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 			}
 		}
 
-		normParent, err := app.getPath(result.parent)
+		urlStruct, err := url.Parse(result.parent)
+		normParent := app.getPath(urlStruct)
 		if err != nil {
 			app.logger.Error(err)
 			continue
@@ -197,7 +187,8 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 
 		for _, link := range result.links {
 
-			normLink, err := app.getPath(link)
+			urlStruct, err := url.Parse(link)
+			normLink := app.getPath(urlStruct)
 			if err != nil {
 				app.logger.Error(err)
 				continue
@@ -227,5 +218,5 @@ func (app *application) crawlPage(urlB *url.URL) (data.Graph, error) {
 	cancle()
 	wg.Wait()
 
-	return graph, nil
+	return graph
 }

@@ -13,10 +13,11 @@ func (app *application) routes() http.Handler {
 	r.Use(app.recoverPanic)
 	r.Use(app.rateLimit)
 
-	fs := http.FileServer(http.Dir("./web/assets/"))
-	r.Handle("/static/*", http.StripPrefix("/static/", fs))
+	r.NotFound(app.notFoundResponse)
+	r.MethodNotAllowed(app.methodNotAllowedResponse)
 
 	r.Get("/healthcheck", app.healthcheckHandler)
+	r.Post("/graph", app.getGraph)
 
 	return r
 }

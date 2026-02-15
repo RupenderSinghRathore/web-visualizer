@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -8,16 +9,10 @@ import (
 
 func TestNormalizeUrl(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		expected    string
-		expectError bool
+		name     string
+		input    string
+		expected string
 	}{
-		{
-			name:     "empty url",
-			input:    "",
-			expectError: true,
-		},
 		{
 			name:     "base url",
 			input:    "http://google.com",
@@ -53,16 +48,12 @@ func TestNormalizeUrl(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := application{}
-			got, err := app.getPath(tt.input)
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error for input %v, but got none", tt.input)
-				}
-				return
-			}
+			urlStruct, err := url.Parse(tt.input)
 			if err != nil {
-				t.Errorf("unexpected error for input %v, but got: %v", tt.input, err)
+				t.Errorf("unexpected error: %v, for input %v", tt.input, err)
 			}
+
+			got := app.getPath(urlStruct)
 			if !reflect.DeepEqual(got, tt.expected) {
 				t.Errorf(
 					"test %v failed: input: %v, expected: %v, got: %v",
@@ -177,7 +168,17 @@ func TestExtractLinksFromBody(t *testing.T) {
 			app := application{}
 			reader := strings.NewReader(tt.htmlBody)
 
-			got, err := app.extractLinksFromBody(reader, tt.baseUrl)
+			urlStruct, err := url.Parse(tt.baseUrl)
+			if err != nil {
+				t.Errorf(
+					"unexpected error for input { %v, %v }, but got: %v",
+					tt.htmlBody,
+					tt.baseUrl,
+					err,
+				)
+			}
+
+			got, err := app.extractLinksFromBody(reader, urlStruct)
 
 			if tt.expectError {
 				if err == nil {
