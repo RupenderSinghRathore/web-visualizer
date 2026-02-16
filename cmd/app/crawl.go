@@ -121,7 +121,7 @@ func (app *application) extractLinksFromBody(
 	}
 }
 
-func (app *application) crawlPage(urlB *url.URL) data.Graph {
+func (app *application) crawlUrl(urlB *url.URL) data.Graph {
 	normalizedBase := app.getPath(urlB)
 
 	graph := data.Graph{}

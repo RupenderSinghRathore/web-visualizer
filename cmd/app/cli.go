@@ -70,7 +70,7 @@ func (app *application) printGraph(urlStr string) error {
 	if err != nil {
 		return err
 	}
-	graph := app.crawlPage(urlB)
+	graph := app.crawlUrl(urlB)
 
 	writer := bufio.NewWriter(os.Stdout)
 	defer writer.Flush()

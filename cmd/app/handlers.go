@@ -30,7 +30,7 @@ func (app *application) getGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	graph := app.crawlPage(urlStruct)
+	graph := app.crawlUrl(urlStruct)
 	env := envelope{"graph": graph}
 	if err := app.writeJSON(w, env, http.StatusOK); err != nil {
 		app.errResponse(w, r, http.StatusBadRequest, err.Error())

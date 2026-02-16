@@ -1,13 +1,18 @@
 package main
 
 import (
+	"RupenderSinghRathore/web-visualizer/internal/data"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
-func TestNormalizeUrl(t *testing.T) {
+func TestGetPath(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -209,6 +214,81 @@ func TestExtractLinksFromBody(t *testing.T) {
 					tt.expected,
 					got,
 				)
+			}
+		})
+	}
+}
+
+func TestCrawlUrl(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprint(w, `<a href="/about"></a>
+					   <a href="/contact"></a>
+					   <a href="/details"></a>`)
+		case "/about":
+			fmt.Fprint(w, `<a href="/"></a>`)
+		case "/contact":
+			fmt.Fprint(w, `<a href="/"></a>`)
+		case "/details":
+			fmt.Fprint(w, `<a href="/"></a>`)
+		}
+	}))
+	defer s.Close()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected data.Graph
+	}{
+		{
+			name:  "general page",
+			input: s.URL,
+			expected: data.Graph{
+				"/": &data.Edge{
+					Visited: 4,
+					Status:  200,
+					Links:   []string{"/about", "/contact", "/details"},
+				},
+				"/about": &data.Edge{
+					Visited: 1,
+					Status:  200,
+					Links:   []string{"/"},
+				},
+				"/contact": &data.Edge{
+					Visited: 1,
+					Status:  200,
+					Links:   []string{"/"},
+				},
+				"/details": &data.Edge{
+					Visited: 1,
+					Status:  200,
+					Links:   []string{"/"},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg confugration
+			cfg.crawl.maxGoroutine = 20
+			cfg.crawl.maxPages = 1000
+			app := application{
+				config: &cfg,
+				client: &http.Client{
+					Timeout: 10 * time.Second,
+				},
+			}
+
+			urlStruct, err := url.ParseRequestURI(tt.input)
+			if err != nil {
+				t.Errorf("unexpected error: %v, for input: %v", err, tt.input)
+			}
+			got := app.crawlUrl(urlStruct)
+
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("input: %v, expected: %v, got: %v", tt.input, tt.expected, got)
 			}
 		})
 	}
