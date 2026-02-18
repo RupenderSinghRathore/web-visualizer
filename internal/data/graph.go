@@ -6,7 +6,7 @@ import (
 
 type Edge struct {
 	Visited int      `json:"visited"`
-	Status  int      `json:"Status"`
+	Status  int      `json:"status"`
 	Links   []string `json:"links"`
 }
 

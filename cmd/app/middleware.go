@@ -58,7 +58,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 				if !c.limiter.Allow() {
 					mutex.Unlock()
 					message := errors.New("rate limit exceeded")
-					app.errResponse(w, r, http.StatusTooManyRequests, message)
+					app.errResponse(w, r, http.StatusTooManyRequests, message.Error())
 
 					return
 				}

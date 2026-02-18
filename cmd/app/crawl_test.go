@@ -269,17 +269,17 @@ func TestCrawlUrl(t *testing.T) {
 		},
 	}
 
+	var cfg confugration
+	cfg.crawl.maxGoroutine = 20
+	cfg.crawl.maxPages = 1000
+	app := application{
+		config: &cfg,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cfg confugration
-			cfg.crawl.maxGoroutine = 20
-			cfg.crawl.maxPages = 1000
-			app := application{
-				config: &cfg,
-				client: &http.Client{
-					Timeout: 10 * time.Second,
-				},
-			}
 
 			urlStruct, err := url.ParseRequestURI(tt.input)
 			if err != nil {
