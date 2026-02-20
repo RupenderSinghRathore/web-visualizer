@@ -78,14 +78,18 @@ func (app *application) fetchGraph(urlStr string) error {
 
 	stopAnimation()
 
-	if err := app.printGraph(graph, urlStruct); err != nil {
+	if err := app.printGraph(graph, urlStruct, linkedText); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (app *application) printGraph(graph data.Graph, urlStruct *url.URL) error {
+func (app *application) printGraph(
+	graph data.Graph,
+	urlStruct *url.URL,
+	formatter func(u string, status, visited int, base string) string,
+) error {
 	l := list.NewWriter()
 	l.SetStyle(list.StyleConnectedRounded)
 
@@ -100,7 +104,7 @@ func (app *application) printGraph(graph data.Graph, urlStruct *url.URL) error {
 			return
 		}
 
-		l.AppendItem(linkedText(u, e.Status, e.Visited, base))
+		l.AppendItem(formatter(u, e.Status, e.Visited, base))
 		l.Indent()
 
 		if !visited[u] {
@@ -118,6 +122,7 @@ func (app *application) printGraph(graph data.Graph, urlStruct *url.URL) error {
 	defer writer.Flush()
 
 	_, err := writer.WriteString(l.Render())
+	// _, err := writer.WriteString(l.RenderHTML())
 	if err != nil {
 		return err
 	}

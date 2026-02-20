@@ -120,3 +120,6 @@ func validateUrl(u string) (*url.URL, error) {
 func linkedText(u string, status, visited int, base string) string {
 	return fmt.Sprintf("\x1b]8;;%s\x1b\\%s(%d, %d)\x1b]8;;\x1b\\", base+u, u, status, visited)
 }
+func webLinkedTag(u string, status, visited int, base string) string {
+	return fmt.Sprintf("<a href='%s' >%s(%d, %d)</a>", base+u, u, status, visited)
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"RupenderSinghRathore/web-visualizer/internal/data"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +22,11 @@ type crawlResult struct {
 	status int
 	err    error
 }
+
+var (
+	ErrStatusCode  = errors.New("error status code")
+	ErrContentType = errors.New("error content-type")
+)
 
 func (app *application) getPath(urlStruct *url.URL) string {
 	path := urlStruct.Path
@@ -57,11 +63,13 @@ func (app *application) fetch(urlStr string) *crawlResult {
 	status := res.StatusCode
 	result.status = status
 	if status > 399 {
-		result.err = fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
+		// result.err = fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
+		result.err = ErrStatusCode
 		return &result
 	}
 	if !isHTML(res.Header.Get("content-type")) {
-		result.err = fmt.Errorf("%s: %s content-type", urlStr, res.Header.Get("content-type"))
+		result.err = ErrContentType
+		// result.err = fmt.Errorf("%s: %s content-type", urlStr, res.Header.Get("content-type"))
 		return &result
 	}
 
@@ -166,10 +174,15 @@ out:
 		fetching--
 
 		if result.err != nil {
-			if result.status == http.StatusTooManyRequests {
+			switch {
+			case result.status == http.StatusTooManyRequests:
 				fmt.Fprintf(os.Stderr, EraseLineANSI)
 				app.logger.Error(result.err)
 				cancle()
+			case errors.Is(result.err, ErrStatusCode) || errors.Is(result.err, ErrContentType):
+			default:
+				fmt.Fprintf(os.Stderr, EraseLineANSI)
+				app.logger.Error(result.err)
 			}
 		}
 
