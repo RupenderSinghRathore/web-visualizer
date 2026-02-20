@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -103,4 +104,19 @@ func (app *application) spinningAnimation(ch <-chan struct{}, wg *sync.WaitGroup
 func isHTML(contentType string) bool {
 	mediaType, _, _ := mime.ParseMediaType(contentType)
 	return mediaType == "text/html"
+}
+
+func validateUrl(u string) (*url.URL, error) {
+	urlStruct, err := url.ParseRequestURI(u)
+	switch {
+	case err != nil:
+		err = ErrInvalidUrl
+	case !urlStruct.IsAbs():
+		err = ErrNonAbsoluteUrl
+	}
+	return urlStruct, err
+}
+
+func linkedText(u string, status, visited int, base string) string {
+	return fmt.Sprintf("\x1b]8;;%s\x1b\\%s(%d, %d)\x1b]8;;\x1b\\", base+u, u, status, visited)
 }

@@ -33,7 +33,7 @@ func TestHealthCheckHandler(t *testing.T) {
 	}
 }
 
-func TestGetGraph(t *testing.T) {
+func TestFetchGraphHandler(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -84,7 +84,7 @@ func TestGetGraph(t *testing.T) {
 			}
 			w := httptest.NewRecorder()
 
-			app.getGraph(w, req)
+			app.fetchGraphHandler(w, req)
 
 			got := envelope{}
 			if err := json.NewDecoder(w.Result().Body).Decode(&got); err != nil {

@@ -17,7 +17,7 @@ func (app *application) routes() http.Handler {
 	r.MethodNotAllowed(app.methodNotAllowedResponse)
 
 	r.Get("/healthcheck", app.healthcheckHandler)
-	r.Post("/graph", app.getGraph)
+	r.Post("/graph", app.fetchGraphHandler)
 
 	return r
 }

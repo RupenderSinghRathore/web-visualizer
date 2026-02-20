@@ -9,13 +9,14 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 
 	"golang.org/x/net/html"
 )
 
 type crawlResult struct {
-	parent string
+	url    string
 	links  []string
 	status int
 	err    error
@@ -35,34 +36,33 @@ func (app *application) getPath(urlStruct *url.URL) string {
 }
 
 func (app *application) fetch(urlStr string) *crawlResult {
+	result := crawlResult{url: urlStr}
+
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		return &crawlResult{parent: urlStr, err: err}
+		result.status = http.StatusNotFound
+		result.err = err
+		return &result
 	}
 	req.Header.Set("User-Agent", "WebVisualizer/1.0")
 	req.Header.Set("Accept", "text/html")
 
 	res, err := app.client.Do(req)
 	if err != nil {
-		return &crawlResult{parent: urlStr, err: err}
+		result.err = err
+		return &result
 	}
 	defer res.Body.Close()
 
 	status := res.StatusCode
+	result.status = status
 	if status > 399 {
-		return &crawlResult{parent: urlStr, status: status, err: fmt.Errorf(
-			"%s: %d status code",
-			urlStr,
-			res.StatusCode,
-		)}
+		result.err = fmt.Errorf("%s: %d status code", urlStr, res.StatusCode)
+		return &result
 	}
 	if !isHTML(res.Header.Get("content-type")) {
-		return &crawlResult{parent: urlStr, status: status, err: fmt.Errorf(
-			"%s: %s content-type",
-			urlStr,
-			res.Header.Get("content-type"),
-		)}
-		// return &crawlResult{parent: urlStr, status: status, err: nil}
+		result.err = fmt.Errorf("%s: %s content-type", urlStr, res.Header.Get("content-type"))
+		return &result
 	}
 
 	finalUrl := res.Request.URL
@@ -77,11 +77,8 @@ func (app *application) fetch(urlStr string) *crawlResult {
 	}
 	slices.Sort(links)
 
-	return &crawlResult{
-		parent: urlStr,
-		status: status,
-		links:  links,
-	}
+	result.links = links
+	return &result
 }
 
 func (app *application) extractLinksFromBody(
@@ -103,6 +100,7 @@ func (app *application) extractLinksFromBody(
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
 						link := attr.Val
+						link = strings.TrimSpace(link)
 						resolvedLink, err := url.Parse(link)
 						if err != nil {
 							app.logger.Error(err)
@@ -168,40 +166,40 @@ out:
 		fetching--
 
 		if result.err != nil {
-			fmt.Fprintf(os.Stderr, EraseLineANSI)
-			app.logger.Error(result.err)
 			if result.status == http.StatusTooManyRequests {
+				fmt.Fprintf(os.Stderr, EraseLineANSI)
+				app.logger.Error(result.err)
 				cancle()
 			}
 		}
 
-		urlStruct, err := url.Parse(result.parent)
-		normParent := app.getPath(urlStruct)
+		urlStruct, err := url.Parse(result.url)
 		if err != nil {
 			app.logger.Error(err)
 			continue
 		}
+		currPath := app.getPath(urlStruct)
 
 		edge := &data.Edge{Visited: 1, Status: result.status, Links: []string{}}
-		graph[normParent] = edge
+		graph[currPath] = edge
 
 		for _, link := range result.links {
 
 			urlStruct, err := url.Parse(link)
-			normLink := app.getPath(urlStruct)
 			if err != nil {
 				app.logger.Error(err)
 				continue
 			}
+			childPath := app.getPath(urlStruct)
 
-			edge.Links = append(edge.Links, normLink)
-			if seen[normLink] {
-				if e, ok := graph[normLink]; ok {
+			edge.Links = append(edge.Links, childPath)
+			if seen[childPath] {
+				if e, ok := graph[childPath]; ok {
 					e.Visited++
 				}
 				continue
 			}
-			seen[normLink] = true
+			seen[childPath] = true
 
 			fetching++
 			go func(l string) {

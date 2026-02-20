@@ -1,13 +1,17 @@
 package main
 
 import (
+	"RupenderSinghRathore/web-visualizer/internal/data"
 	"bufio"
 	"errors"
 	"flag"
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
+
+	"github.com/jedib0t/go-pretty/list"
 )
 
 func commonFlags(fg *flag.FlagSet, cfg *confugration) {
@@ -45,7 +49,7 @@ func crawlFlags(crawlCmd *flag.FlagSet, cfg *confugration) {
 	crawlCmd.StringVar(&cfg.urlStr, "url", "", "url to crawl")
 }
 
-func (app *application) printGraph(urlStr string) error {
+func (app *application) fetchGraph(urlStr string) error {
 	if urlStr == "" {
 		return errors.New("empty url")
 	}
@@ -66,35 +70,57 @@ func (app *application) printGraph(urlStr string) error {
 	}
 	defer stopAnimation()
 
-	urlB, err := url.ParseRequestURI(urlStr)
+	urlStruct, err := validateUrl(urlStr)
 	if err != nil {
 		return err
 	}
-	graph := app.crawlUrl(urlB)
+	graph := app.crawlUrl(urlStruct)
+
+	stopAnimation()
+
+	if err := app.printGraph(graph, urlStruct); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (app *application) printGraph(graph data.Graph, urlStruct *url.URL) error {
+	l := list.NewWriter()
+	l.SetStyle(list.StyleConnectedRounded)
+
+	base := urlStruct.Scheme + "://" + urlStruct.Host
+	base = strings.TrimSuffix(base, "/")
+
+	var dfs func(u string)
+	visited := make(map[string]bool)
+	dfs = func(u string) {
+		e := graph[u]
+		if e == nil {
+			return
+		}
+
+		l.AppendItem(linkedText(u, e.Status, e.Visited, base))
+		l.Indent()
+
+		if !visited[u] {
+			visited[u] = true
+			for _, next := range e.Links {
+				dfs(next)
+			}
+		}
+		l.UnIndent()
+	}
+	origin := app.getPath(urlStruct)
+	dfs(origin)
 
 	writer := bufio.NewWriter(os.Stdout)
 	defer writer.Flush()
 
-	stopAnimation()
-
-	for endPoint, edge := range graph {
-		_, err = fmt.Fprintf(writer, "%s(%d, %d) -> [ ", endPoint, edge.Visited, edge.Status)
-		if err != nil {
-			return err
-		}
-
-		for _, link := range edge.Links {
-			_, err = fmt.Fprintf(writer, "%s ", link)
-			if err != nil {
-				return err
-			}
-		}
-
-		_, err = fmt.Fprintf(writer, "]\n\n")
-		if err != nil {
-			return err
-		}
+	_, err := writer.WriteString(l.Render())
+	if err != nil {
+		return err
 	}
-
+	writer.WriteByte('\n')
 	return nil
 }

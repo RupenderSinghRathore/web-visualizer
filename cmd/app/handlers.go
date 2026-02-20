@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/url"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +16,7 @@ var (
 	ErrNonAbsoluteUrl = errors.New("non absolute url")
 )
 
-func (app *application) getGraph(w http.ResponseWriter, r *http.Request) {
+func (app *application) fetchGraphHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Url string `json:"url"`
 	}
@@ -27,13 +26,9 @@ func (app *application) getGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	urlStruct, err := url.ParseRequestURI(input.Url)
+	urlStruct, err := validateUrl(input.Url)
 	if err != nil {
-		app.errResponse(w, r, http.StatusBadRequest, ErrInvalidUrl.Error())
-		return
-	}
-	if !urlStruct.IsAbs() {
-		app.errResponse(w, r, http.StatusBadRequest, ErrNonAbsoluteUrl.Error())
+		app.errResponse(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 

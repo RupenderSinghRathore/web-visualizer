@@ -58,7 +58,7 @@ func main() {
 		commonFlags(crawlCmd, &cfg)
 		crawlCmd.Parse(os.Args[2:])
 
-		if err := app.printGraph(app.config.urlStr); err != nil {
+		if err := app.fetchGraph(app.config.urlStr); err != nil {
 			app.crashErr(err)
 		}
 
