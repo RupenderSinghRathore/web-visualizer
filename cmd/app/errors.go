@@ -11,7 +11,12 @@ func (app *application) serverErrResponse(w http.ResponseWriter, r *http.Request
 	app.errResponse(w, r, http.StatusInternalServerError, msg)
 }
 
-func (app *application) errResponse(w http.ResponseWriter, r *http.Request, status int, msg string) {
+func (app *application) errResponse(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	msg string,
+) {
 	env := envelope{"error": msg}
 	if err := app.writeJSON(w, env, status); err != nil {
 		app.logError(r, err)

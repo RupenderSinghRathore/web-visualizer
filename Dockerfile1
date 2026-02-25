@@ -1,0 +1,23 @@
+FROM golang:1.25.6-bookworm AS build
+
+RUN apt-get update && apt-get install -y ca-certificates
+
+WORKDIR /cmd/app
+
+COPY go.mod go.sum /
+COPY . .
+
+# RUN echo "nameserver 8.8.8.8" > /tmp/my-resolv.conf && \
+#     echo "nameserver 1.1.1.1" >> /etc/my-resolv.conf
+
+RUN CGO_ENABLED=0 go build -buildmode=pie -o /bin/web-visualizer ./cmd/app
+
+FROM scratch
+
+# COPY --from=build /tmp/my-resolv.conf /etc/resolv.conf
+# COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# COPY --from=build /etc/resolv.conf /etc/resolv.conf
+
+COPY --from=build /bin/web-visualizer /bin/web-visualizer
+COPY --from=build /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/
+COPY --from=build /lib64/ld-linux-x86-64.so.2 /lib64/

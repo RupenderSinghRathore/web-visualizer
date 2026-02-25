@@ -34,7 +34,7 @@ func commonFlags(fg *flag.FlagSet, cfg *confugration) {
 
 func serverFlags(serverCmd *flag.FlagSet, cfg *confugration) {
 
-	serverCmd.IntVar(&cfg.port, "port", 8080, "Port to be used")
+	// serverCmd.IntVar(&cfg.port, "port", 8080, "Port to be used")
 	serverCmd.Float64Var(
 		&cfg.limiter.rps,
 		"limiter-rps",

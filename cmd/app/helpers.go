@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -78,6 +79,14 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 	return nil
 }
 
+func (app *application) getPort() (int, error) {
+	p := os.Getenv("PORT")
+	if p == "" {
+		return 8080, nil
+	}
+	return strconv.Atoi(p)
+}
+
 func (app *application) crashErr(err error) {
 	app.logger.Error(err)
 	os.Exit(1)
@@ -101,6 +110,7 @@ func (app *application) spinningAnimation(ch <-chan struct{}, wg *sync.WaitGroup
 		}
 	}
 }
+
 func isHTML(contentType string) bool {
 	mediaType, _, _ := mime.ParseMediaType(contentType)
 	return mediaType == "text/html"

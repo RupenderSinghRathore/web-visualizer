@@ -1,0 +1,9 @@
+spec: v0.6
+
+name: web-visualizer
+
+runtime: base:latest
+
+rootfs: ./Dockerfile1
+
+cmd: ["/bin/web-visualizer", "server"]

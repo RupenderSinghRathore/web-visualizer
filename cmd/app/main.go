@@ -50,6 +50,12 @@ func main() {
 		config: &cfg,
 	}
 
+	port, err := app.getPort()
+	if err != nil {
+		app.crashErr(err)
+	}
+	cfg.port = port
+
 	switch os.Args[1] {
 	case "crawl":
 		crawlCmd := flag.NewFlagSet("crawl", flag.ContinueOnError)
