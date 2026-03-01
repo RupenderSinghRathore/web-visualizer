@@ -102,4 +102,4 @@ docker run --rm kami0sama/web-visualizer:latest client -url "https://some-site.c
 Adjust additional flags, environment variables, and volumes as needed for your setup.
 
 ## License
-
+Distributed under the MIT License. See `LICENSE` for more information.
