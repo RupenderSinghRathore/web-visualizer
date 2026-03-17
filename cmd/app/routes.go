@@ -12,6 +12,7 @@ func (app *application) routes() http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(app.recoverPanic)
 	r.Use(app.rateLimit)
+	r.Use(app.enableCORS)
 
 	r.NotFound(app.notFoundResponse)
 	r.MethodNotAllowed(app.methodNotAllowedResponse)
