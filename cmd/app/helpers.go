@@ -35,6 +35,7 @@ func (app *application) writeJSON(w http.ResponseWriter, data envelope, status i
 
 	return nil
 }
+
 func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	maxBytes := MegaByte
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
@@ -88,9 +89,9 @@ func (app *application) getPort() (int, error) {
 }
 
 func (app *application) crashErr(err error) {
-	app.logger.Error(err)
-	os.Exit(1)
+	app.logger.Fatal(err)
 }
+
 func (app *application) spinningAnimation(ch <-chan struct{}, wg *sync.WaitGroup) {
 	wg.Done()
 	spinner := `-\|/`
@@ -130,6 +131,7 @@ func validateUrl(u string) (*url.URL, error) {
 func linkedText(u string, status, visited int, base string) string {
 	return fmt.Sprintf("\x1b]8;;%s\x1b\\%s(%d, %d)\x1b]8;;\x1b\\", base+u, u, status, visited)
 }
+
 func webLinkedTag(u string, status, visited int, base string) string {
 	return fmt.Sprintf("<a href='%s' >%s(%d, %d)</a>", base+u, u, status, visited)
 }

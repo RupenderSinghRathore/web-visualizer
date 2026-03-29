@@ -2,13 +2,11 @@ package main
 
 import (
 	"errors"
-	"io"
 	"net/http"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	io.WriteString(w, "<h1>Heavenly Demon God Domain</h1>")
+	app.writeJSON(w, envelope{"status": "ok"}, http.StatusOK)
 }
 
 var (
