@@ -28,8 +28,8 @@ func commonFlags(fg *flag.FlagSet, cfg *confugration) {
 		20,
 		"max goroutines for crawler",
 	)
-	fg.IntVar(&cfg.crawl.maxDepth, "max-depth", 100, "max width of the links graph")
-	fg.IntVar(&cfg.crawl.maxPages, "max-pages", 1000, "max width of the links graph")
+	fg.IntVar(&cfg.crawl.maxDepth, "max-depth", 10, "max width of the links graph")
+	fg.IntVar(&cfg.crawl.maxPages, "max-pages", 100, "max width of the links graph")
 }
 
 func serverFlags(serverCmd *flag.FlagSet, cfg *confugration) {
